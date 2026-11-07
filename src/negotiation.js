@@ -171,13 +171,15 @@ export function buyerPlan(listing, session, budget) {
   const r = session.agentRounds;
   const opening = Math.min(budget, Math.round(listing.listPrice * 0.6));
   const target = Math.min(budget, Math.round(opening + (budget - opening) * Math.min(1, r * 0.3)));
-  if (ask <= target) return { kind: 'accept', price: ask };
-  if (ask <= budget && r >= 3) return { kind: 'accept', price: ask };
-  if (r >= MAX_AGENT_ROUNDS) return { kind: 'walk' };
+  const why = (s) => `Round ${r + 1} · seller asks ${money(ask)} · budget ${money(budget)} · ${s}`;
+  if (ask <= target) return { kind: 'accept', price: ask, why: why(`ask is within my target of ${money(target)}, so I accept.`) };
+  if (ask <= budget && r >= 3) return { kind: 'accept', price: ask, why: why('ask is within budget and the seller is slowing down, so I lock it in.') };
+  if (r >= MAX_AGENT_ROUNDS) return { kind: 'walk', why: why('too many rounds without a deal, so I walk away.') };
   const last = session.lastBuyerOffer ?? 0;
   const price = Math.min(budget, Math.max(target, last + 1));
-  if (price <= last && ask > budget) return { kind: 'walk' };
-  return { kind: 'offer', price };
+  if (price <= last && ask > budget) return { kind: 'walk', why: why('the seller will not come within budget, so I walk away.') };
+  const move = last ? `raising my offer by ${money(price - last)} to ${money(price)}` : `opening low at ${money(price)}`;
+  return { kind: 'offer', price, why: why(`${move}. I never reveal the budget.`) };
 }
 
 /** One round of "my AI vs. their AI": the buyer agent speaks, then the seller agent replies. */
@@ -191,7 +193,7 @@ export function agentStep(listing, session, { budget, style }) {
     let text = msg.text || '';
 
     if (plan.kind === 'walk') {
-      session.messages.push({ role: 'buyer', actor: 'agent', text, offer: null, at: Date.now() });
+      session.messages.push({ role: 'buyer', actor: 'agent', text, offer: null, thought: plan.why, source: msg.source, at: Date.now() });
       session.status = 'walked';
       return { done: true };
     }
@@ -201,6 +203,7 @@ export function agentStep(listing, session, { budget, style }) {
 
     session.agentRounds += 1;
     recordBuyer(session, text, plan.price, 'agent');
+    Object.assign(session.messages.at(-1), { thought: plan.why, source: msg.source });
     await runSellerTurn(listing, session, plan.price);
     return { done: session.status !== 'open' };
   });
