@@ -7,6 +7,9 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA_DIR = process.env.DATA_DIR || path.join(root, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
+/** Sandbox payout receiver for demo sellers. Sandbox accepts any address; set SANDBOX_SELLER_EMAIL to use a real sandbox account. */
+const sandboxSellerEmail = (name) => process.env.SANDBOX_SELLER_EMAIL || `${name.toLowerCase()}@haggl-sellers.example.com`;
+
 function seedListings() {
   const now = Date.now();
   return [
@@ -54,13 +57,60 @@ function seedListings() {
       personality: 'A sharp, data-driven furniture flipper. Cites comparable sales, respects confident buyers, never sounds desperate.',
       urgency: 0.35,
     },
-  ].map((l, i) => ({ ...l, id: `seed-${i + 1}`, stock: 3, createdAt: now }));
+    {
+      emoji: '🚴',
+      title: 'Lightweight Road Bike (54cm)',
+      description:
+        'Carbon fork, 18-speed, 9.4kg. Great for fast commutes and weekend rides. New bar tape, chain replaced in spring. Some scuffs on the crank.',
+      listPrice: 280,
+      floorPrice: 210,
+      sellerName: 'Marco',
+      personality: 'A competitive amateur cyclist, proud of his gear and a tough negotiator. Talks about weight and speed. Rarely budges early.',
+      urgency: 0.15,
+    },
+    {
+      emoji: '🧺',
+      title: 'City Commuter Bike with Basket',
+      description:
+        '7-speed step-through city bike with front basket, mudguards, lights and a kickstand. Comfortable upright ride. Tyres replaced last year.',
+      listPrice: 190,
+      floorPrice: 140,
+      sellerName: 'Priya',
+      personality: 'A warm, chatty retiree who rode it to the farmers market every week. Happy to give a fair deal to someone who will use it daily.',
+      urgency: 0.6,
+    },
+    {
+      emoji: '📸',
+      title: 'Instant Camera + 2 Film Packs',
+      description: 'Instant film camera in mint green with two unopened 10-shot film packs and a strap. Works perfectly, minor scratch on the back.',
+      listPrice: 95,
+      floorPrice: 70,
+      sellerName: 'Jules',
+      personality: 'An upbeat art student. Friendly, a bit dramatic, loves emojis in moderation.',
+      urgency: 0.55,
+    },
+    {
+      emoji: '🖥️',
+      title: 'Standing Desk Converter',
+      description: 'Sit-stand desk converter, 80cm wide, gas-spring lift, holds two monitors. Bought for a home office I no longer need.',
+      listPrice: 140,
+      floorPrice: 100,
+      sellerName: 'Sam',
+      personality: 'A pragmatic software engineer. Short, polite messages, responds well to clear numbers.',
+      urgency: 0.45,
+    },
+  ].map((l, i) => ({ ...l, id: `seed-${i + 1}`, stock: 3, createdAt: now, sellerPaypalEmail: sandboxSellerEmail(l.sellerName) }));
 }
 
 function load() {
   try {
-    const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    return { events: [], ...data };
+    const data = { events: [], ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) };
+    for (const seed of seedListings()) {
+      const existing = data.listings.find((l) => l.id === seed.id);
+      if (!existing) data.listings.push(seed);
+      else existing.sellerPaypalEmail ??= seed.sellerPaypalEmail;
+    }
+    return data;
   } catch {
     return { listings: seedListings(), sessions: {}, events: [] };
   }
@@ -100,9 +150,9 @@ export function addEvent(event) {
 }
 export const events = () => db.events;
 
-/** What anyone on the internet may see about a listing. The floor price and strategy never leave the server. */
+/** What anyone on the internet may see about a listing. The floor price, strategy and payout email never leave the server. */
 export function publicListing(l) {
-  const { floorPrice, urgency, ...rest } = l;
+  const { floorPrice, urgency, sellerPaypalEmail, ...rest } = l;
   return rest;
 }
 
