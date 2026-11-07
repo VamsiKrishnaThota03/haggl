@@ -59,27 +59,46 @@ function seedListings() {
 
 function load() {
   try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    return { events: [], ...data };
   } catch {
-    return { listings: seedListings(), sessions: {} };
+    return { listings: seedListings(), sessions: {}, events: [] };
   }
 }
 
 const db = load();
 
+function writeNow() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db, null, 2));
+    fs.renameSync(DB_FILE + '.tmp', DB_FILE);
+  } catch (err) {
+    console.error('Could not persist data:', err.message);
+  }
+}
+
 let saveTimer;
 export function save() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db, null, 2));
-      fs.renameSync(DB_FILE + '.tmp', DB_FILE);
-    } catch (err) {
-      console.error('Could not persist data:', err.message);
-    }
-  }, 150);
+  saveTimer = setTimeout(writeNow, 150);
 }
+
+/** Write pending changes immediately (used on shutdown). */
+export function flush() {
+  clearTimeout(saveTimer);
+  writeNow();
+}
+
+/** Record a verified PayPal webhook event. Returns false if it was already recorded (PayPal retries deliveries). */
+export function addEvent(event) {
+  if (db.events.some((e) => e.id === event.id)) return false;
+  db.events.unshift(event);
+  db.events.length = Math.min(db.events.length, 200);
+  save();
+  return true;
+}
+export const events = () => db.events;
 
 /** What anyone on the internet may see about a listing. The floor price and strategy never leave the server. */
 export function publicListing(l) {

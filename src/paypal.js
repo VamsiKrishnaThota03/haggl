@@ -79,3 +79,28 @@ export function createOrder({ sessionId, title, listPrice, agreedPrice }) {
 /** Capture an approved order. Idempotent per order id, so a double click can't charge twice. */
 export const captureOrder = (orderId) =>
   call('POST', `/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, undefined, `capture-${orderId}`);
+
+export const webhookConfigured = () => Boolean(process.env.PAYPAL_WEBHOOK_ID && isConfigured());
+
+/**
+ * Ask PayPal to verify a webhook delivery's signature. Fails closed: anything unverifiable is rejected.
+ * https://developer.paypal.com/docs/api/webhooks/v1/#verify-webhook-signature
+ */
+export async function verifyWebhook(headers, event) {
+  if (!webhookConfigured()) throw new HttpError(503, 'Webhooks are not configured (set PAYPAL_WEBHOOK_ID).');
+  const h = (name) => headers[name];
+  const fields = {
+    auth_algo: h('paypal-auth-algo'),
+    cert_url: h('paypal-cert-url'),
+    transmission_id: h('paypal-transmission-id'),
+    transmission_sig: h('paypal-transmission-sig'),
+    transmission_time: h('paypal-transmission-time'),
+  };
+  if (Object.values(fields).some((v) => !v) || !event?.id) return false;
+  const result = await call('POST', '/v1/notifications/verify-webhook-signature', {
+    ...fields,
+    webhook_id: process.env.PAYPAL_WEBHOOK_ID,
+    webhook_event: event,
+  });
+  return result.verification_status === 'SUCCESS';
+}
