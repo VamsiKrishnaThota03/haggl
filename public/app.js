@@ -86,6 +86,7 @@ async function route() {
   document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === (page === 'item' ? 'market' : page)));
   try {
     if (page === 'item' && id) await dealRoom(id, query, token);
+    else if (page === 'shop') shopPage(token, query);
     else if (page === 'sell') sellPage();
     else if (page === 'dashboard') await dashboard();
     else await market();
@@ -117,7 +118,7 @@ async function market() {
           'div',
           { class: 'cta' },
           el('a', { class: 'btn light lg', href: '#/item/seed-2?agent=200' }, '▶ Watch two AIs negotiate'),
-          el('a', { class: 'btn glass lg', href: '#market' , onclick: (e) => { e.preventDefault(); document.getElementById('market').scrollIntoView(); } }, 'Browse listings'),
+          el('a', { class: 'btn glass lg', href: '#/shop' }, '🛍️ Let my AI shop for me'),
         ),
         el('div', { class: 'trustline' }, el('span', {}, 'Prompt-injection-proof pricing'), el('span', {}, 'PayPal Checkout'), el('span', {}, 'Agent-to-agent deals')),
       ),
@@ -152,7 +153,7 @@ async function market() {
       [
         ['🔒', 'Sellers set the limits', 'An asking price and a secret lowest price. The floor never reaches the AI or the browser, so it cannot leak.'],
         ['🤖', 'AI agents negotiate', 'The seller agent bargains in character. Buyers chat, or deploy their own agent that never reveals or exceeds their budget.'],
-        ['💳', 'PayPal settles the deal', 'The agreed price locks. The server creates a PayPal order for exactly that amount, then captures and verifies it.'],
+        ['💳', 'PayPal settles the deal', 'The buyer pays the exact agreed price with PayPal Checkout, and the seller is paid out automatically with PayPal Payouts.'],
       ].map(([ico, h, p], i) => el('div', { class: 'step' }, el('span', { class: 'num' }, `0${i + 1}`), el('div', { class: 'ico' }, ico), el('h3', {}, h), el('p', {}, p))),
     ),
   );
@@ -221,7 +222,7 @@ async function dealRoom(listingId, query, token) {
   const saved = localStorage.getItem(sessionKey(listingId));
   if (saved) session = await api(`/api/sessions/${saved}`).catch(() => null);
   const autoBudget = Number(query.get('agent')) || null;
-  if (!session || session.status === 'walked' || session.status === 'refunded' || (autoBudget && session.status !== 'open')) {
+  if (!session || ['walked', 'refunded', 'released'].includes(session.status) || (autoBudget && session.status !== 'open')) {
     app.replaceChildren(el('div', { class: 'wrap' }, el('div', { class: 'panel connecting' }, el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i')), el('h4', {}, 'Connecting you to the seller\'s AI agent…'), el('p', { class: 'hint' }, 'The agent is reading the listing and preparing its opening line.'))));
     session = await api('/api/sessions', { method: 'POST', body: { listingId } });
     localStorage.setItem(sessionKey(listingId), session.id);
@@ -422,6 +423,7 @@ async function dealRoom(listingId, query, token) {
           step(true, 'PayPal order created by the server', s.orderId),
           step(true, 'Payment captured and amount verified', s.capture.id),
           step(Boolean(s.webhookConfirmedAt), s.webhookConfirmedAt ? 'Confirmed by signed PayPal webhook' : 'Waiting for PayPal webhook', config?.paypal?.webhooks ? null : 'webhooks enabled once deployed'),
+          payoutStep(s, step),
         ),
         el('p', { class: 'hint' }, `Thanks, ${s.capture.payer}! Payment captured and verified with PayPal.`),
         el('div', { class: 'row', style: 'margin-top:12px' }, el('a', { class: 'btn ghost sm', href: '#/dashboard' }, 'View in dashboard'), el('button', { class: 'btn ghost sm', onclick: restart }, 'Buy another')),
@@ -504,6 +506,185 @@ async function dealRoom(listingId, query, token) {
   }
 }
 
+function payoutStep(s, step) {
+  const p = s.payout;
+  if (!p) return null;
+  if (p.status === 'NO_PAYOUT_EMAIL') return step(false, 'Seller payout skipped', 'seller has not added a PayPal email');
+  if (p.status === 'FAILED') return step(false, `Seller payout of ${money(p.amount)} failed`, 'will need a manual retry');
+  const done = p.status === 'SUCCESS';
+  return step(done, `${done ? 'Seller paid' : 'Paying seller'} ${money(p.amount)} via PayPal Payouts`, `${p.feePct}% platform fee ${money(p.fee)} · batch ${p.batchId}`);
+}
+
+/* ====================================================================== AI shopping agent */
+
+function shopPage(token, query) {
+  const alive = () => token === pageToken;
+  const examples = ['A bike for commuting to campus, under $200', 'A film camera to learn photography, max $160', 'Something for my home office under $150'];
+  const req = el('input', { class: 'shop-input', placeholder: examples[0], maxlength: 300, value: query.get('q') || '', 'aria-label': 'What do you want to buy?' });
+  const budget = el('input', { type: 'number', min: 1, step: 1, placeholder: 'auto' });
+  let style = 'friendly';
+  const seg = el('div', { class: 'seg' }, ['friendly', 'tough', 'quick'].map((st) => el('button', { type: 'button', class: st === style ? 'on' : '', onclick: (e) => { style = st; seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.target)); } }, st[0].toUpperCase() + st.slice(1))));
+  const go = el('button', { class: 'btn agent lg' }, '🛍️ Send my agent shopping');
+  const err = el('div', { class: 'err' });
+  const results = el('div', { class: 'shop-results' });
+
+  const form = el(
+    'form',
+    { class: 'panel shop-form', onsubmit: (e) => { e.preventDefault(); start(); } },
+    el('label', { class: 'field' }, 'What do you want?', req),
+    el('div', { class: 'row', style: 'margin-top:12px;align-items:flex-end;flex-wrap:wrap' }, el('label', { class: 'field', style: 'max-width:160px' }, 'Budget ($)', budget), el('div', { class: 'field', style: 'max-width:300px' }, 'Negotiation style', seg), el('div', { style: 'flex:1' }), go),
+    el('div', { class: 'suggest', style: 'margin-top:12px' }, examples.map((x) => el('button', { type: 'button', onclick: () => { req.value = x; start(); } }, x))),
+    err,
+  );
+
+  app.replaceChildren(
+    el(
+      'div',
+      { class: 'wrap' },
+      el('div', { class: 'page-head' }, el('div', { class: 'kicker' }, 'AI shopping agent'), el('h1', {}, 'Say what you want. Your agent haggles with every seller at once.'), el('p', {}, 'It finds matching listings, negotiates with each seller in parallel, keeps your budget secret, and brings back the best deal for you to pay with PayPal.')),
+      form,
+      results,
+    ),
+  );
+
+  const stage = (n, title, ...body) => el('section', { class: 'stage' }, el('div', { class: 'stage-head' }, el('span', { class: 'stage-num' }, n), el('h3', {}, title)), ...body);
+
+  async function start() {
+    if (go.disabled) return;
+    err.textContent = '';
+    const request = req.value.trim() || examples[0];
+    req.value = request;
+    go.disabled = true;
+    go.textContent = '🧠 Thinking…';
+    results.replaceChildren(stage('1', 'Understanding your request…', el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i'))));
+    let plan;
+    try {
+      plan = await api('/api/shop/plan', { method: 'POST', body: { request, budget: Number(budget.value) || undefined } });
+    } catch (e) {
+      err.textContent = e.message;
+      results.replaceChildren();
+      go.disabled = false;
+      go.textContent = '🛍️ Send my agent shopping';
+      return;
+    }
+    if (!alive()) return;
+    budget.value = plan.budget;
+
+    const s1 = stage(
+      '1',
+      'Understood',
+      el('div', { class: 'panel plan' }, el('p', { style: 'margin:0 0 10px' }, `“${plan.summary}”`), el('div', { class: 'meta' }, el('span', { class: 'chip offer' }, `Secret budget ${money(plan.budget)}`), el('span', { class: 'chip ai' }, plan.source === 'ai' ? 'Gemini' : 'keyword match'), el('span', { class: 'chip' }, `${plan.candidates.length} matching listing${plan.candidates.length === 1 ? '' : 's'}`))),
+    );
+    if (!plan.candidates.length) {
+      results.replaceChildren(s1, el('div', { class: 'panel empty' }, el('div', { class: 'big' }, '🔎'), el('p', {}, 'Nothing in the market matches that yet. Try another request.')));
+      go.disabled = false;
+      go.textContent = '🛍️ Send my agent shopping';
+      return;
+    }
+
+    const lanes = plan.candidates.map((listing) => ({ listing, session: null, done: false, error: '' }));
+    const laneBox = el('div', { class: 'lanes' });
+    const s2 = stage('2', `Negotiating with ${lanes.length} seller${lanes.length === 1 ? '' : 's'} at the same time`, laneBox);
+    const s3 = el('div');
+    results.replaceChildren(s1, s2, s3);
+
+    const drawLanes = () => laneBox.replaceChildren(...lanes.map(laneCard));
+    function laneCard(lane) {
+      const s = lane.session;
+      const l = lane.listing;
+      const st = !s ? 'connecting' : s.status;
+      const label = { connecting: 'Connecting…', open: `Negotiating · round ${s?.agentRounds || 0}`, agreed: `Deal ${money(s?.agreedPrice)}`, walked: 'Walked away', released: 'Not chosen', paid: 'Paid' }[st] || st;
+      const last = s?.messages.filter((m) => m.role === 'seller').at(-1);
+      const lastMine = s?.messages.filter((m) => m.role === 'buyer').at(-1);
+      const ask = s?.lastSellerOffer ?? l.listPrice;
+      const pct = Math.max(4, Math.round((ask / l.listPrice) * 100));
+      return el(
+        'div',
+        { class: `panel lane ${st}` },
+        el('div', { class: 'item-mini' }, art(l), el('div', {}, el('h3', {}, l.title), el('p', {}, `${l.sellerName}'s agent · asking ${money(l.listPrice)}`))),
+        el('p', { class: 'hint lane-reason' }, `🎯 ${l.reason}`),
+        el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;margin-top:10px' }, el('span', { class: `status-pill ${st}` }, label), el('span', { class: 'hint' }, `Ask ${money(ask)} · my offer ${money(s?.lastBuyerOffer)}`)),
+        el('div', { class: 'bar' }, el('i', { style: `width:${pct}%` })),
+        last ? el('div', { class: 'lane-quote' }, el('span', {}, `“${last.text}”`)) : el('div', { class: 'lane-quote' }, el('span', { class: 'typing' }, el('i'), el('i'), el('i'))),
+        lastMine?.thought ? el('div', { class: 'thought' }, lastMine.thought) : null,
+        lane.error ? el('div', { class: 'err' }, lane.error) : null,
+        s ? el('a', { class: 'hint', href: `#/item/${l.id}`, style: 'display:inline-block;margin-top:8px' }, 'Open full chat →') : null,
+      );
+    }
+    drawLanes();
+    go.textContent = '🤖 Negotiating…';
+
+    await Promise.all(
+      lanes.map(async (lane) => {
+        try {
+          lane.session = await api('/api/sessions', { method: 'POST', body: { listingId: lane.listing.id } });
+          localStorage.setItem(sessionKey(lane.listing.id), lane.session.id);
+        } catch (e) {
+          lane.error = e.message;
+          lane.done = true;
+        }
+        if (alive()) drawLanes();
+      }),
+    );
+
+    while (alive() && lanes.some((l) => !l.done)) {
+      await Promise.all(
+        lanes.filter((l) => !l.done).map(async (lane) => {
+          try {
+            const r = await api(`/api/sessions/${lane.session.id}/agent-step`, { method: 'POST', body: { budget: plan.budget, style } });
+            lane.session = r.session;
+            lane.done = r.done;
+          } catch (e) {
+            lane.error = e.message;
+            lane.done = true;
+          }
+          if (alive()) drawLanes();
+        }),
+      );
+      await sleep(700);
+    }
+    if (!alive()) return;
+
+    const agreed = lanes.filter((l) => l.session?.status === 'agreed');
+    s3.replaceChildren(stage('3', 'Comparing the offers…', el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i'))));
+    const rec = await api('/api/shop/recommend', { method: 'POST', body: { request, sessionIds: agreed.map((l) => l.session.id) } }).catch(() => ({ winnerId: null, explanation: 'Could not compare offers.' }));
+    await Promise.all(agreed.filter((l) => l.session.id !== rec.winnerId).map(async (l) => { l.session = await api(`/api/sessions/${l.session.id}/release`, { method: 'POST' }).catch(() => l.session); }));
+    if (!alive()) return;
+    drawLanes();
+
+    const winner = lanes.find((l) => l.session?.id === rec.winnerId);
+    go.disabled = false;
+    go.textContent = '🛍️ Shop again';
+    if (!winner) {
+      s3.replaceChildren(stage('3', 'No deal this time', el('div', { class: 'panel' }, el('p', { style: 'margin:0' }, rec.explanation), el('p', { class: 'hint', style: 'margin-top:8px' }, 'Your agent walked away instead of overpaying. Try a higher budget.'))));
+      return;
+    }
+    const w = winner.session;
+    const saved = winner.listing.listPrice - w.agreedPrice;
+    const payBox = el('div', {}, el('div', { id: 'paypal-buttons' }), el('div', { class: 'err', id: 'pay-error' }));
+    s3.replaceChildren(
+      stage(
+        '3',
+        'Your agent recommends',
+        el(
+          'div',
+          { class: 'panel deal winner' },
+          el('div', { class: 'winner-grid' },
+            el('div', {}, el('div', { class: 'item-mini' }, art(winner.listing), el('div', {}, el('h3', {}, winner.listing.title), el('p', {}, `from ${winner.listing.sellerName}`))), el('p', { class: 'rec' }, `🤖 ${rec.explanation}`),
+              el('table', { class: 'compare' }, el('tbody', {}, lanes.map((l) => el('tr', { class: l === winner ? 'win' : '' }, el('td', {}, `${l.listing.emoji} ${l.listing.title}`), el('td', {}, money(l.listing.listPrice)), el('td', {}, l.session?.agreedPrice != null && l.session.status !== 'walked' ? el('b', {}, money(l.session.agreedPrice)) : '-'), el('td', {}, l === winner ? '🏆 best deal' : l.session?.status === 'walked' ? 'walked away' : 'not chosen')))))),
+            el('div', {}, el('div', { class: 'label' }, 'Negotiated price'), el('div', { class: 'big' }, money(w.agreedPrice)), el('p', { class: 'hint' }, el('span', { class: 'save' }, `You save ${money(saved)} (${Math.round((saved / winner.listing.listPrice) * 100)}%)`), ` · budget ${money(plan.budget)} never revealed`), payBox),
+          ),
+        ),
+      ),
+    );
+    if (agreed.length || lanes.length) confetti();
+    mountPayPal(w.id, payBox, () => { location.hash = `#/item/${winner.listing.id}`; });
+    s3.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  if (query.get('q')) start();
+}
+
 /* ====================================================================== PayPal */
 
 let sdkPromise = null;
@@ -519,7 +700,7 @@ function loadPayPalSdk() {
   return sdkPromise;
 }
 
-async function mountPayPal(sessionId, box) {
+async function mountPayPal(sessionId, box, onPaid = route) {
   const target = box.querySelector('#paypal-buttons');
   const errBox = box.querySelector('#pay-error');
   try {
@@ -532,7 +713,7 @@ async function mountPayPal(sessionId, box) {
           errBox.textContent = 'Capturing payment…';
           await api(`/api/sessions/${sessionId}/paypal/capture`, { method: 'POST', body: { orderId: data.orderID } });
           toast('✅ Payment captured by PayPal');
-          route();
+          onPaid();
         },
         onCancel: () => { errBox.textContent = 'Checkout cancelled. Your price is still held.'; },
         onError: (err) => { errBox.textContent = err?.message || 'PayPal checkout failed. Please try again.'; },
@@ -556,6 +737,7 @@ function sellPage() {
     floorPrice: el('input', { type: 'number', min: 1, step: '0.01', placeholder: '90' }),
     personality: el('textarea', { maxlength: 300, placeholder: 'How should your AI agent negotiate? e.g. "Friendly, but firm. Gives a little extra to polite buyers."' }),
     urgency: el('input', { type: 'range', min: 0, max: 1, step: 0.05, value: 0.5 }),
+    sellerPaypalEmail: el('input', { type: 'email', maxlength: 254, placeholder: 'you@example.com (sandbox account works)' }),
   };
   const msg = el('div', { class: 'err' });
   const previewSlot = el('div');
@@ -615,6 +797,7 @@ function sellPage() {
             el('div', { class: 'two' }, field('Asking price ($)', f.listPrice, 'Shown to buyers.'), field('🔒 Lowest price you accept ($)', f.floorPrice, 'Secret. Never sent to the AI or any browser.', 'secret')),
             field('Agent personality', f.personality),
             field('Negotiation speed', f.urgency, '← Hold firm · Sell fast →'),
+            field('💸 PayPal email for payouts', f.sellerPaypalEmail, 'After a sale, Haggl pays you automatically with PayPal Payouts (minus a 5% platform fee). Kept private.'),
             msg,
             el('button', { class: 'btn lg' }, 'Publish listing & start my agent'),
           ),
@@ -657,12 +840,12 @@ async function dashboard() {
     el(
       'div',
       { class: 'wrap' },
-      el('div', { class: 'page-head' }, el('div', { class: 'kicker' }, 'Seller dashboard'), el('h1', {}, 'Your agents, at work'), el('p', {}, 'Every negotiation your AI agents handled, and every payment PayPal settled.')),
+      el('div', { class: 'page-head' }, el('div', { class: 'kicker' }, 'Seller dashboard'), el('h1', {}, 'Your agents, at work'), el('p', {}, `Every deal your AI agents closed, every PayPal payment, and every seller payout (${s.feePct}% platform fee).`)),
       el(
         'div',
         { class: 'kpis' },
         kpi(s.revenue, 'Paid via PayPal', 'hl', (n) => money(Math.round(n))),
-        kpi(s.negotiations, 'Negotiations handled'),
+        kpi(s.paidOut, 'Paid out to sellers', '', (n) => money(Math.round(n))),
         kpi(s.dealsAgreed, 'Deals agreed'),
         kpi(s.agentDeals, 'Agent-to-agent deals'),
         kpi(s.avgDiscountPct, 'Avg. discount given', '', (n) => `${Math.round(n)}%`),
@@ -690,6 +873,7 @@ async function dashboard() {
       { headerName: '🛡️', field: 'guardrails', width: 70, headerTooltip: 'Guardrail interventions', type: 'numericColumn' },
       { headerName: 'Status', field: 'status', width: 110, cellRenderer: pill, filter: true },
       { headerName: 'PayPal capture', field: 'captureId', flex: 1, minWidth: 170, valueFormatter: (p) => p.value || '-', cellClass: 'mono' },
+      { headerName: 'Seller payout', field: 'payoutStatus', width: 140, valueFormatter: (p) => (p.data.payoutAmount != null ? `${money(p.data.payoutAmount)} · ${String(p.value).toLowerCase()}` : p.value === 'NO_PAYOUT_EMAIL' ? 'no email' : '-') },
       { headerName: 'Webhook', field: 'webhookConfirmed', width: 105, valueFormatter: (p) => (p.value ? '✓ verified' : '-') },
       { headerName: 'When', field: 'at', width: 150, sort: 'desc', valueFormatter: (p) => (p.value ? new Date(p.value).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '') },
     ],
