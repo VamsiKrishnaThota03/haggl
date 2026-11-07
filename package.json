@@ -1,0 +1,20 @@
+{
+  "name": "haggl",
+  "version": "1.0.0",
+  "description": "Haggl - a marketplace where AI agents negotiate the price and PayPal settles the deal.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18.18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.22.3"
+  }
+}
