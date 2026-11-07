@@ -3,22 +3,31 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Haggl - AI haggles, PayPal settles</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤝</text></svg>" />
+    <title>Haggl · Let the AIs haggle. PayPal settles.</title>
+    <meta name="description" content="A marketplace where AI agents negotiate every price within code-enforced limits, and PayPal settles the deal." />
+    <meta name="theme-color" content="#0a1f63" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#/">🤝 Haggl</a>
-      <nav>
-        <a href="#/" data-nav="market">Market</a>
-        <a href="#/sell" data-nav="sell">Sell</a>
-        <a href="#/dashboard" data-nav="dashboard">Dashboard</a>
-      </nav>
-      <div class="badges" id="badges"></div>
+      <div class="wrap">
+        <a class="brand" href="#/"><span class="logo">🤝</span>Haggl</a>
+        <nav>
+          <a href="#/" data-nav="market">Market</a>
+          <a href="#/sell" data-nav="sell">Sell</a>
+          <a href="#/dashboard" data-nav="dashboard">Dashboard</a>
+        </nav>
+        <div class="status" id="status"></div>
+      </div>
     </header>
     <main id="app"></main>
-    <footer class="foot">Sandbox demo. No real money moves. AI talks, code holds the money rules, PayPal settles.</footer>
+    <footer class="footer">
+      <div class="wrap">
+        <span>🤝 <b>Haggl</b>. The AI talks, code holds the money rules, PayPal settles.</span>
+        <span>Sandbox demo, no real money moves · <a href="https://github.com/VamsiKrishnaThota03/haggl" target="_blank" rel="noopener">Source on GitHub</a></span>
+      </div>
+    </footer>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
