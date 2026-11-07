@@ -358,8 +358,10 @@ app.post(
 
 /* ---------------------------------------------------------------- seller dashboard */
 
-app.get('/api/stats', (req, res) => {
+app.get('/api/stats', h(async (req, res) => {
   const sessions = store.allSessions();
+  // Refresh a few in-flight payouts so the dashboard shows PayPal's latest status.
+  await Promise.all(sessions.filter((s) => s.payout?.batchId && !PAYOUT_FINAL.has(s.payout.status)).slice(0, 5).map(refreshPayout));
   const deals = sessions
     .filter((s) => ['agreed', 'paid', 'refunded'].includes(s.status))
     .map((s) => {
@@ -377,7 +379,7 @@ app.get('/api/stats', (req, res) => {
         byAgent: s.messages.some((m) => m.actor === 'agent'),
         captureId: s.capture?.id || null,
         webhookConfirmed: Boolean(s.webhookConfirmedAt),
-        payoutStatus: s.payout?.status || null,
+        payoutStatus: s.payout?.itemStatus === 'UNCLAIMED' ? 'UNCLAIMED' : s.payout?.status || null,
         payoutAmount: s.payout?.batchId ? s.payout.amount : null,
         guardrails: s.messages.reduce((n, m) => n + (m.guardrail?.length || 0), 0),
         at: s.capture?.at || s.agreedAt,
@@ -399,7 +401,7 @@ app.get('/api/stats', (req, res) => {
     deals: deals.slice(0, 200),
     events: store.events().slice(0, 30),
   });
-});
+}));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 
