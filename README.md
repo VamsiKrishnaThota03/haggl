@@ -12,6 +12,9 @@ When they agree, the deal locks and the buyer pays exactly that amount with **Pa
 
 > **The AI does the talking. Code holds the money rules. PayPal settles the deal.**
 
+### 🚀 Live demo: **[haggl.onrender.com](https://haggl.onrender.com)**
+Pay with a PayPal **sandbox** personal account (fake money). The free server sleeps when idle, so the first load can take about 40 seconds.
+
 ![Haggl home](docs/screenshots/1-home.png)
 
 ---
