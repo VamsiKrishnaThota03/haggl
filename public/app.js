@@ -406,7 +406,12 @@ async function dealRoom(listingId, query, token) {
         el('div', { class: 'err', id: 'pay-error' }),
         el('p', { class: 'hint', style: 'margin-top:8px' }, 'Sandbox: log in with your PayPal sandbox personal account. No real money moves.'),
       );
-      queueMicrotask(() => mountPayPal(s.id, box));
+      const showReceipt = () => {
+        const clean = `#/item/${listingId}`;
+        if (location.hash !== clean) location.hash = clean; // hashchange re-routes to the paid receipt
+        else route();
+      };
+      queueMicrotask(() => mountPayPal(s.id, box, showReceipt));
       return box;
     }
     if (s.status === 'paid') {
@@ -492,12 +497,12 @@ async function dealRoom(listingId, query, token) {
   window.scrollTo(0, 0);
 
   // Paid deals: poll briefly for the signed webhook confirmation.
-  if (state.session.status === 'paid' && !state.session.webhookConfirmedAt && config?.paypal?.webhooks) {
-    for (let i = 0; i < 8 && alive(); i++) {
-      await sleep(3000);
-      const fresh = await api(`/api/sessions/${state.session.id}`).catch(() => null);
-      if (fresh?.webhookConfirmedAt && alive()) { state.session = fresh; render(); break; }
-    }
+  // Paid deals: poll briefly for the signed webhook and the seller payout to complete.
+  const waiting = (s) => s.status === 'paid' && ((!s.webhookConfirmedAt && config?.paypal?.webhooks) || (s.payout?.batchId && s.payout.status !== 'SUCCESS'));
+  for (let i = 0; i < 10 && alive() && waiting(state.session); i++) {
+    await sleep(4000);
+    const fresh = await api(`/api/sessions/${state.session.id}`).catch(() => null);
+    if (fresh && alive()) { state.session = fresh; render(); }
   }
 
   if (autoBudget && state.session.status === 'open' && state.session.messages.length <= 1) {
@@ -512,7 +517,10 @@ function payoutStep(s, step) {
   if (p.status === 'NO_PAYOUT_EMAIL') return step(false, 'Seller payout skipped', 'seller has not added a PayPal email');
   if (p.status === 'FAILED') return step(false, `Seller payout of ${money(p.amount)} failed`, 'will need a manual retry');
   const done = p.status === 'SUCCESS';
-  return step(done, `${done ? 'Seller paid' : 'Paying seller'} ${money(p.amount)} via PayPal Payouts`, `${p.feePct}% platform fee ${money(p.fee)} · batch ${p.batchId}`);
+  const unclaimed = p.itemStatus === 'UNCLAIMED';
+  const title = done ? `Seller paid ${money(p.amount)} via PayPal Payouts` : `Paying seller ${money(p.amount)} via PayPal Payouts…`;
+  const sub = `${p.feePct}% platform fee ${money(p.fee)} · batch ${p.batchId}${unclaimed ? ' · unclaimed: demo seller email has no PayPal account yet' : ''}`;
+  return step(done, title, sub);
 }
 
 /* ====================================================================== AI shopping agent */
