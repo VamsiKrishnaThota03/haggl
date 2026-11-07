@@ -51,7 +51,8 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '64kb' }));
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
+// maxAge 0 + ETag: browsers revalidate each load (cheap 304s), so a new deploy is picked up immediately.
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
 app.use('/vendor/ag-grid', express.static(path.join(__dirname, 'node_modules/ag-grid-community/dist'), { maxAge: '7d' }));
 
 const apiLimit = rateLimit({ max: 300 });
