@@ -1,0 +1,25 @@
+# One-click deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+# Secrets are marked sync:false, so Render asks for them and they never live in git.
+services:
+  - type: web
+    name: haggl
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: HOST
+        value: 0.0.0.0 # Render routes public traffic to the service through its own proxy
+      - key: TRUST_PROXY
+        value: "1"
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
