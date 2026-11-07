@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as store from './src/store.js';
 import * as paypal from './src/paypal.js';
-import { aiStatus, draftListing, buyerStyles } from './src/ai.js';
+import { aiStatus, draftListing, buyerStyles, planShopping, recommendDeal } from './src/ai.js';
 import { greet, buyerSays, agentStep } from './src/negotiation.js';
 import { rateLimit } from './src/ratelimit.js';
 import { HttpError, round2 } from './src/util.js';
@@ -12,6 +12,9 @@ import { HttpError, round2 } from './src/util.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const DEAL_TTL_MS = 30 * 60 * 1000;
+const PLATFORM_FEE_PCT = Math.min(30, Math.max(0, Number(process.env.PLATFORM_FEE_PCT ?? 5)));
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,}$/i;
+const maskEmail = (e) => e.replace(/^(.{2}).*(@.*)$/, '$1***$2');
 const startedAt = Date.now();
 
 // Behind a hosting proxy (e.g. Render), trust the first hop so rate limits see the real client IP.
@@ -114,8 +117,10 @@ app.post(
       listPrice: round2(b.listPrice),
       floorPrice: round2(b.floorPrice),
       urgency: Math.min(1, Math.max(0, Number(b.urgency ?? 0.5))) || 0.5,
+      sellerPaypalEmail: text(b.sellerPaypalEmail, 254) || null,
       stock: 1,
     };
+    if (listing.sellerPaypalEmail && !EMAIL_RE.test(listing.sellerPaypalEmail)) throw new HttpError(400, 'That PayPal email does not look right.');
     if (!listing.title) throw new HttpError(400, 'Add a title.');
     if (!(listing.listPrice >= 1 && listing.listPrice <= 10000)) throw new HttpError(400, 'Asking price must be between $1 and $10,000.');
     if (!(listing.floorPrice > 0 && listing.floorPrice <= listing.listPrice))
@@ -143,6 +148,7 @@ app.get(
   '/api/sessions/:id',
   h(async (req, res) => {
     const { session, listing } = loadSession(req);
+    await refreshPayout(session);
     res.json(view(session, listing));
   }),
 );
@@ -169,6 +175,37 @@ app.post(
     res.json({ done, session: view(session, listing) });
   }),
 );
+
+/* ---------------------------------------------------------------- PayPal payouts to sellers */
+
+async function payOutSeller(session, listing) {
+  const fee = round2((session.agreedPrice * PLATFORM_FEE_PCT) / 100);
+  const amount = round2(session.agreedPrice - fee);
+  const base = { amount, fee, feePct: PLATFORM_FEE_PCT, at: Date.now() };
+  if (!listing.sellerPaypalEmail) return (session.payout = { ...base, status: 'NO_PAYOUT_EMAIL' });
+  try {
+    const r = await paypal.createPayout({ sessionId: session.id, receiver: listing.sellerPaypalEmail, amount, title: listing.title });
+    session.payout = { ...base, status: r.batch_header?.batch_status || 'PENDING', batchId: r.batch_header?.payout_batch_id, receiver: maskEmail(listing.sellerPaypalEmail) };
+  } catch (err) {
+    console.error('Payout failed for', session.id, err.message);
+    session.payout = { ...base, status: 'FAILED', error: err.message };
+  }
+}
+
+const PAYOUT_FINAL = new Set(['SUCCESS', 'DENIED', 'CANCELED', 'FAILED', 'NO_PAYOUT_EMAIL']);
+async function refreshPayout(session) {
+  const p = session.payout;
+  if (!p?.batchId || PAYOUT_FINAL.has(p.status) || Date.now() - (p.checkedAt || 0) < 5000) return;
+  p.checkedAt = Date.now();
+  try {
+    const r = await paypal.getPayout(p.batchId);
+    p.status = r.batch_header?.batch_status || p.status;
+    p.itemStatus = r.items?.[0]?.transaction_status || p.itemStatus;
+    store.save();
+  } catch (err) {
+    console.warn('Payout status check failed:', err.message);
+  }
+}
 
 /* ---------------------------------------------------------------- PayPal checkout */
 
@@ -218,6 +255,7 @@ app.post(
       at: Date.now(),
     };
     listing.stock = Math.max(0, listing.stock - 1);
+    await payOutSeller(session, listing);
     store.save();
     res.json(view(session, listing));
   }),
@@ -226,7 +264,12 @@ app.post(
 /* ---------------------------------------------------------------- PayPal webhooks */
 
 const findSessionForEvent = (resource) => {
-  const id = resource.custom_id || resource.purchase_units?.[0]?.custom_id;
+  const id = resource.custom_id || resource.purchase_units?.[0]?.custom_id || resource.payout_item?.sender_item_id;
+  const batchId = resource.batch_header?.payout_batch_id || resource.payout_batch_id;
+  if (batchId) {
+    const s = store.allSessions().find((x) => x.payout?.batchId === batchId);
+    if (s) return s;
+  }
   if (id && store.getSession(id)) return store.getSession(id);
   // Refund events point at the original capture via an "up" link.
   const captureId = resource.links?.find((l) => l.rel === 'up')?.href?.split('/').pop() || resource.id;
@@ -245,16 +288,71 @@ app.post(
       id: event.id,
       type: event.event_type,
       summary: String(event.summary || '').slice(0, 200),
-      amount: resource.amount?.value ? Number(resource.amount.value) : null,
+      amount: Number(resource.amount?.value ?? resource.payout_item?.amount?.value ?? resource.batch_header?.amount?.value) || null,
       sessionId: session?.id || null,
       at: Date.now(),
     });
     if (fresh && session) {
       if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') session.webhookConfirmedAt = Date.now();
       if (event.event_type === 'PAYMENT.CAPTURE.REFUNDED' || event.event_type === 'PAYMENT.CAPTURE.REVERSED') session.status = 'refunded';
+      if (event.event_type.startsWith('PAYMENT.PAYOUTSBATCH.') && session.payout) session.payout.status = event.event_type.split('.').pop();
+      if (event.event_type.startsWith('PAYMENT.PAYOUTS-ITEM.') && session.payout) session.payout.itemStatus = event.event_type.split('.').pop();
       store.save();
     }
     res.json({ received: true });
+  }),
+);
+
+/* ---------------------------------------------------------------- AI shopping agent */
+
+app.post(
+  '/api/shop/plan',
+  aiLimit,
+  h(async (req, res) => {
+    const request = String(req.body?.request || '').trim().slice(0, 300);
+    if (request.length < 3) throw new HttpError(400, 'Tell your agent what you are looking for.');
+    const inStock = store.listings().filter((l) => l.stock > 0);
+    const plan = await planShopping(request, inStock.map(store.publicListing));
+    const userBudget = Number(req.body?.budget) || null;
+    const budget = round2(userBudget || plan.budget || 0);
+    if (!(budget >= 1 && budget <= 10000)) throw new HttpError(422, 'What is your budget? Add it to the request, e.g. "under $200".');
+    const seen = new Set();
+    const candidates = plan.picks
+      .filter((p) => inStock.some((l) => l.id === p.id) && !seen.has(p.id) && seen.add(p.id))
+      .slice(0, 3)
+      .map((p) => ({ ...store.publicListing(store.getListing(p.id)), reason: String(p.reason || '').slice(0, 200) }));
+    res.json({ request, budget, summary: plan.summary, candidates, source: plan.source });
+  }),
+);
+
+app.post(
+  '/api/shop/recommend',
+  aiLimit,
+  h(async (req, res) => {
+    const request = String(req.body?.request || '').slice(0, 300);
+    const ids = Array.isArray(req.body?.sessionIds) ? req.body.sessionIds.slice(0, 5).map(String) : [];
+    const offers = ids
+      .map((id) => store.getSession(id))
+      .filter((s) => s?.status === 'agreed')
+      .map((s) => {
+        const l = store.getListing(s.listingId);
+        return { sessionId: s.id, listingId: l.id, title: l.title, description: l.description, listPrice: l.listPrice, price: s.agreedPrice };
+      });
+    if (!offers.length) return res.json({ winnerId: null, explanation: 'No seller came within your budget, so your agent did not buy anything.' });
+    res.json(await recommendDeal(request, offers));
+  }),
+);
+
+/** The buyer declines an agreed (unpaid) deal, e.g. the shopping agent chose another seller. */
+app.post(
+  '/api/sessions/:id/release',
+  h(async (req, res) => {
+    const { session, listing } = loadSession(req);
+    if (session.status === 'open' || session.status === 'agreed') {
+      session.status = 'released';
+      store.save();
+    }
+    res.json(view(session, listing));
   }),
 );
 
@@ -279,6 +377,8 @@ app.get('/api/stats', (req, res) => {
         byAgent: s.messages.some((m) => m.actor === 'agent'),
         captureId: s.capture?.id || null,
         webhookConfirmed: Boolean(s.webhookConfirmedAt),
+        payoutStatus: s.payout?.status || null,
+        payoutAmount: s.payout?.batchId ? s.payout.amount : null,
         guardrails: s.messages.reduce((n, m) => n + (m.guardrail?.length || 0), 0),
         at: s.capture?.at || s.agreedAt,
       };
@@ -293,6 +393,8 @@ app.get('/api/stats', (req, res) => {
     buyerSavings: round2(deals.reduce((s, d) => s + (d.listPrice - d.price), 0)),
     avgDiscountPct: deals.length ? Math.round(deals.reduce((s, d) => s + d.discountPct, 0) / deals.length) : 0,
     agentDeals: deals.filter((d) => d.byAgent).length,
+    paidOut: round2(deals.reduce((s, d) => s + (d.payoutAmount || 0), 0)),
+    feePct: PLATFORM_FEE_PCT,
     guardrailsTriggered: sessions.reduce((n, s) => n + s.messages.reduce((k, m) => k + (m.guardrail?.length || 0), 0), 0),
     deals: deals.slice(0, 200),
     events: store.events().slice(0, 30),
