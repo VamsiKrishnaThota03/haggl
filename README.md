@@ -51,6 +51,13 @@ When the guardrail intervenes, the UI shows it, so **judges can try to break it 
 
 ## Features
 
+**🛍️ AI shopping agent (new)**
+- Say what you want in one sentence, e.g. *"A bike for commuting to campus, under $200"*. Gemini understands the request, extracts your budget and shortlists matching listings with a reason for each.
+- Your agent then **negotiates with up to 3 sellers at the same time**, keeping your budget secret, and walks away from any seller who won't come within budget.
+- Gemini compares the agreed deals against what you asked for and recommends the best one. You pay it with PayPal, and the other deals are released automatically.
+
+![AI shopping agent](docs/screenshots/9-shop-result.png)
+
 **For buyers**
 - 💬 **Deal room:** chat with the seller's agent in plain language ("would you take 160?", "is the shutter OK?"). Every counter-offer has a one-click *Accept*.
 - 🤖 **Your own buyer agent:** set a secret max budget and a style (friendly / tough / quick) and click *Let my AI haggle for me*. It negotiates round by round, shows its **reasoning** for every move, and **walks away** rather than exceed your budget.
@@ -60,6 +67,7 @@ When the guardrail intervenes, the UI shows it, so **judges can try to break it 
 **For sellers**
 - ✨ **AI listing writer:** type a rough note and Gemini writes the title and description and suggests an asking price and a floor price, with a live preview.
 - 🔒 **Secret floor price + agent personality + negotiation speed**, which the agent uses to concede faster or hold firm.
+- 💸 **Automatic seller payouts:** after the buyer pays, Haggl sends the seller their share (minus a 5% platform fee) with the **PayPal Payouts API**, and tracks the payout status until PayPal confirms it.
 - 📊 **Seller dashboard (AG Grid):** sortable and filterable deals with discount bars, buyer type (human or AI agent), guardrail hits, PayPal capture IDs and webhook status, plus a feed of verified PayPal webhook events.
 
 **Trust & safety**
@@ -113,9 +121,10 @@ When the guardrail intervenes, the UI shows it, so **judges can try to break it 
 |---|---|
 | **PayPal JavaScript SDK** (Smart Payment Buttons) | Checkout UI in the deal room |
 | **PayPal Orders v2 REST API** | Server-side order creation for the negotiated amount, then capture + verification |
+| **PayPal Payouts API** | Automatic seller payouts after each sale (idempotent per deal), with status tracking |
 | **PayPal Webhooks API** | `PAYMENT.CAPTURE.*` events, each verified with `verify-webhook-signature` before it's trusted |
 | **PayPal OAuth 2.0** (client credentials) | Server authentication to PayPal, token cached |
-| **Google Gemini API** (`gemini-3.5-flash-lite`, free tier) | Seller agent, buyer agent and listing writer, using structured JSON output (`responseSchema`), with automatic fallback to a second model |
+| **Google Gemini API** (`gemini-3.5-flash-lite`, free tier) | Seller agent, buyer agent, shopping planner, deal recommender and listing writer, all using structured JSON output (`responseSchema`); requests are spread across 3 free models with a concurrency cap |
 | **AG Grid Community** | Seller dashboard data grid |
 | **Render** | Hosting (`render.yaml` blueprint) |
 | Node.js + Express, GitHub Actions | Backend, CI |
@@ -146,7 +155,8 @@ npm test                  # 11 tests
 ```
 The header shows which AI model and PayPal environment are connected.
 
-### Try it (2 minutes)
+### Try it (3 minutes)
+1. Click **🛍️ Let my AI shop for me** and pick *"A bike for commuting to campus, under $200"*. Watch 3 negotiations run at once.
 1. Click **▶ Watch two AIs negotiate** on the home page. Your agent haggles for the bike with a $200 budget.
 2. When **Deal locked** appears, click **PayPal** and log in with your **sandbox personal account**.
 3. See the payment timeline, then open **Dashboard**.
@@ -174,7 +184,6 @@ Free instances sleep when idle, so the first load takes about 30 seconds. Data i
 
 ## What's next
 
-- **PayPal Payouts** to send proceeds to each seller automatically (a true multi-seller marketplace).
 - Buyer agents that shop across many listings at once: *"find me a bike under $200 and get the best deal."*
 - Bundle deals, shipping negotiation, seller-defined rules of engagement, and seller accounts.
 
