@@ -80,6 +80,31 @@ export function createOrder({ sessionId, title, listPrice, agreedPrice }) {
 export const captureOrder = (orderId) =>
   call('POST', `/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, undefined, `capture-${orderId}`);
 
+/**
+ * Pay the seller their share with the Payouts API. Idempotent per deal via sender_batch_id.
+ * https://developer.paypal.com/docs/api/payments.payouts-batch/v1/
+ */
+export function createPayout({ sessionId, receiver, amount, title }) {
+  return call('POST', '/v1/payments/payouts', {
+    sender_batch_header: {
+      sender_batch_id: `haggl-${sessionId}`,
+      email_subject: 'You sold an item on Haggl!',
+      email_message: `Your AI agent closed a deal for "${title}". Here is your payout.`.slice(0, 1000),
+    },
+    items: [
+      {
+        recipient_type: 'EMAIL',
+        receiver,
+        amount: { value: amount.toFixed(2), currency: 'USD' },
+        note: `Haggl payout: ${title}`.slice(0, 4000),
+        sender_item_id: sessionId,
+      },
+    ],
+  }, `payout-${sessionId}`);
+}
+
+export const getPayout = (batchId) => call('GET', `/v1/payments/payouts/${encodeURIComponent(batchId)}`);
+
 export const webhookConfigured = () => Boolean(process.env.PAYPAL_WEBHOOK_ID && isConfigured());
 
 /**
