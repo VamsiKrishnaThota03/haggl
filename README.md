@@ -58,6 +58,19 @@ When the guardrail intervenes, the UI shows it, so **judges can try to break it 
 
 ![AI shopping agent](docs/screenshots/9-shop-result.png)
 
+**🛡️ Jailbreak Arena (new)**
+- A public challenge: trick an AI seller into going below its secret price. Prompt injection, fake admin messages, role-play, guilt trips: anything goes.
+- A live scoreboard shows attempts, successes (still **0**) and how often code overruled the AI. Every attempt is classified by technique and shown on a wall of blocked attempts.
+
+**🌐 Haggle in your language, by voice (new)**
+- Pick a language (Hindi, Telugu, Tamil, Spanish, French, German, Portuguese, Chinese, Japanese or English). The AI agents negotiate in it, while the seller sees an English translation, enabling cross-border commerce with PayPal settling in USD.
+- 🎤 **Speak** your offer (browser speech recognition) and 🔊 **hear** the agents reply, with different voices for the seller and your buyer agent.
+- Offers are understood in any script ("150 डॉलर", "$१५०"), and the guardrail checks prices in every script, in both the reply and its translation.
+
+| Jailbreak Arena | Haggling in Hindi |
+|---|---|
+| ![Arena](docs/screenshots/10-arena.png) | ![Hindi](docs/screenshots/12-hindi.png) |
+
 **For buyers**
 - 💬 **Deal room:** chat with the seller's agent in plain language ("would you take 160?", "is the shutter OK?"). Every counter-offer has a one-click *Accept*.
 - 🤖 **Your own buyer agent:** set a secret max budget and a style (friendly / tough / quick) and click *Let my AI haggle for me*. It negotiates round by round, shows its **reasoning** for every move, and **walks away** rather than exceed your budget.
@@ -125,6 +138,7 @@ When the guardrail intervenes, the UI shows it, so **judges can try to break it 
 | **PayPal Webhooks API** | `PAYMENT.CAPTURE.*` events, each verified with `verify-webhook-signature` before it's trusted |
 | **PayPal OAuth 2.0** (client credentials) | Server authentication to PayPal, token cached |
 | **Google Gemini API** (`gemini-3.5-flash-lite`, free tier) | Seller agent, buyer agent, shopping planner, deal recommender and listing writer, all using structured JSON output (`responseSchema`); requests are spread across 3 free models with a concurrency cap |
+| **Web Speech API** (built into the browser) | Voice input (speech recognition) and spoken agent replies (speech synthesis) in 10 languages, at no cost |
 | **AG Grid Community** | Seller dashboard data grid |
 | **Render** | Hosting (`render.yaml` blueprint) |
 | Node.js + Express, GitHub Actions | Backend, CI |
@@ -151,7 +165,7 @@ git clone https://github.com/VamsiKrishnaThota03/haggl.git && cd haggl
 npm install
 cp .env.example .env      # then paste your keys into .env
 npm start                 # open http://127.0.0.1:3000
-npm test                  # 11 tests
+npm test                  # 15 tests
 ```
 The header shows which AI model and PayPal environment are connected.
 
@@ -160,7 +174,7 @@ The header shows which AI model and PayPal environment are connected.
 1. Click **▶ Watch two AIs negotiate** on the home page. Your agent haggles for the bike with a $200 budget.
 2. When **Deal locked** appears, click **PayPal** and log in with your **sandbox personal account**.
 3. See the payment timeline, then open **Dashboard**.
-4. Open the **Vintage 35mm Film Camera** and click **😈 Try a jailbreak ($1)**.
+4. Open **Arena** and try any attack (or write your own). Then pick **🌐 हिन्दी** in the top bar and haggle in Hindi, using 🎤 to speak.
 5. **Sell:** type a rough note, click **✨ Write my listing with AI**, publish, then haggle with your own agent.
 
 ## Deploy (free, on Render)
