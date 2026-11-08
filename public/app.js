@@ -31,6 +31,12 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+/** Replace a node's children, skipping null/false (DOM replaceChildren would print them as the text "null"). */
+function fill(node, ...children) {
+  node.replaceChildren(...children.flat(Infinity).filter((c) => c != null && c !== false));
+  return node;
+}
+
 function svg(tag, attrs = {}, text) {
   const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
   for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
@@ -124,7 +130,7 @@ async function route() {
     else if (page === 'dashboard') await dashboard();
     else await market();
   } catch (err) {
-    app.replaceChildren(el('div', { class: 'wrap' }, el('div', { class: 'panel', style: 'margin-top:40px' }, el('h4', {}, 'Something went wrong'), el('p', { class: 'err' }, err.message), el('a', { class: 'btn ghost sm', href: '#/' }, '← Back to market'))));
+    fill(app, el('div', { class: 'wrap' }, el('div', { class: 'panel', style: 'margin-top:40px' }, el('h4', {}, 'Something went wrong'), el('p', { class: 'err' }, err.message), el('a', { class: 'btn ghost sm', href: '#/' }, '← Back to market'))));
   }
   if (page !== 'item') window.scrollTo(0, 0);
 }
@@ -236,7 +242,7 @@ async function market() {
           el('div', { class: 'ab-text' }, el('b', {}, `${arenaStats.attempts.toLocaleString()} jailbreak attempts · ${arenaStats.broken} succeeded`), el('span', {}, 'Think you can trick an AI seller below its secret price? Enter the Jailbreak Arena.')),
           el('span', { class: 'btn light' }, 'Try to break it →')))
     : null;
-  app.replaceChildren(hero, strip, arenaBanner, steps, grid, trust);
+  fill(app, hero, strip, arenaBanner, steps, grid, trust);
 }
 
 function listingCard(l) {
@@ -263,7 +269,7 @@ async function dealRoom(listingId, query, token) {
   if (saved) session = await api(`/api/sessions/${saved}`).catch(() => null);
   const autoBudget = Number(query.get('agent')) || null;
   if (!session || ['walked', 'refunded', 'released'].includes(session.status) || (autoBudget && session.status !== 'open')) {
-    app.replaceChildren(el('div', { class: 'wrap' }, el('div', { class: 'panel connecting' }, el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i')), el('h4', {}, 'Connecting you to the seller\'s AI agent…'), el('p', { class: 'hint' }, 'The agent is reading the listing and preparing its opening line.'))));
+    fill(app, el('div', { class: 'wrap' }, el('div', { class: 'panel connecting' }, el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i')), el('h4', {}, 'Connecting you to the seller\'s AI agent…'), el('p', { class: 'hint' }, 'The agent is reading the listing and preparing its opening line.'))));
     session = await api('/api/sessions', { method: 'POST', body: { listingId, lang: lang() } });
     localStorage.setItem(sessionKey(listingId), session.id);
   }
@@ -521,7 +527,7 @@ async function dealRoom(listingId, query, token) {
     const msgs = el('div', { class: 'msgs', 'aria-live': 'polite' }, messageNodes());
     shown = s.messages.length;
 
-    app.replaceChildren(
+    fill(app, 
       el(
         'div',
         { class: 'wrap' },
@@ -604,7 +610,7 @@ function shopPage(token, query) {
     err,
   );
 
-  app.replaceChildren(
+  fill(app, 
     el(
       'div',
       { class: 'wrap' },
@@ -623,13 +629,13 @@ function shopPage(token, query) {
     req.value = request;
     go.disabled = true;
     go.textContent = '🧠 Thinking…';
-    results.replaceChildren(stage('1', 'Understanding your request…', el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i'))));
+    fill(results, stage('1', 'Understanding your request…', el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i'))));
     let plan;
     try {
       plan = await api('/api/shop/plan', { method: 'POST', body: { request, budget: Number(budget.value) || undefined } });
     } catch (e) {
       err.textContent = e.message;
-      results.replaceChildren();
+      fill(results);
       go.disabled = false;
       go.textContent = '🛍️ Send my agent shopping';
       return;
@@ -643,7 +649,7 @@ function shopPage(token, query) {
       el('div', { class: 'panel plan' }, el('p', { style: 'margin:0 0 10px' }, `“${plan.summary}”`), el('div', { class: 'meta' }, el('span', { class: 'chip offer' }, `Secret budget ${money(plan.budget)}`), el('span', { class: 'chip ai' }, plan.source === 'ai' ? 'Gemini' : 'keyword match'), el('span', { class: 'chip' }, `${plan.candidates.length} matching listing${plan.candidates.length === 1 ? '' : 's'}`))),
     );
     if (!plan.candidates.length) {
-      results.replaceChildren(s1, el('div', { class: 'panel empty' }, el('div', { class: 'big' }, '🔎'), el('p', {}, 'Nothing in the market matches that yet. Try another request.')));
+      fill(results, s1, el('div', { class: 'panel empty' }, el('div', { class: 'big' }, '🔎'), el('p', {}, 'Nothing in the market matches that yet. Try another request.')));
       go.disabled = false;
       go.textContent = '🛍️ Send my agent shopping';
       return;
@@ -653,9 +659,9 @@ function shopPage(token, query) {
     const laneBox = el('div', { class: 'lanes' });
     const s2 = stage('2', `Negotiating with ${lanes.length} seller${lanes.length === 1 ? '' : 's'} at the same time`, laneBox);
     const s3 = el('div');
-    results.replaceChildren(s1, s2, s3);
+    fill(results, s1, s2, s3);
 
-    const drawLanes = () => laneBox.replaceChildren(...lanes.map(laneCard));
+    const drawLanes = () => fill(laneBox, ...lanes.map(laneCard));
     function laneCard(lane) {
       const s = lane.session;
       const l = lane.listing;
@@ -713,7 +719,7 @@ function shopPage(token, query) {
     if (!alive()) return;
 
     const agreed = lanes.filter((l) => l.session?.status === 'agreed');
-    s3.replaceChildren(stage('3', 'Comparing the offers…', el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i'))));
+    fill(s3, stage('3', 'Comparing the offers…', el('div', { class: 'bubble typing' }, el('i'), el('i'), el('i'))));
     const rec = await api('/api/shop/recommend', { method: 'POST', body: { request, sessionIds: agreed.map((l) => l.session.id) } }).catch(() => ({ winnerId: null, explanation: 'Could not compare offers.' }));
     await Promise.all(agreed.filter((l) => l.session.id !== rec.winnerId).map(async (l) => { l.session = await api(`/api/sessions/${l.session.id}/release`, { method: 'POST' }).catch(() => l.session); }));
     if (!alive()) return;
@@ -723,13 +729,13 @@ function shopPage(token, query) {
     go.disabled = false;
     go.textContent = '🛍️ Shop again';
     if (!winner) {
-      s3.replaceChildren(stage('3', 'No deal this time', el('div', { class: 'panel' }, el('p', { style: 'margin:0' }, rec.explanation), el('p', { class: 'hint', style: 'margin-top:8px' }, 'Your agent walked away instead of overpaying. Try a higher budget.'))));
+      fill(s3, stage('3', 'No deal this time', el('div', { class: 'panel' }, el('p', { style: 'margin:0' }, rec.explanation), el('p', { class: 'hint', style: 'margin-top:8px' }, 'Your agent walked away instead of overpaying. Try a higher budget.'))));
       return;
     }
     const w = winner.session;
     const saved = winner.listing.listPrice - w.agreedPrice;
     const payBox = el('div', {}, el('div', { id: 'paypal-buttons' }), el('div', { class: 'err', id: 'pay-error' }));
-    s3.replaceChildren(
+    fill(s3, 
       stage(
         '3',
         'Your agent recommends',
@@ -809,7 +815,7 @@ async function arenaPage(token) {
   function drawBoard() {
     const tech = Object.entries(board.byTechnique).sort((a, b) => b[1] - a[1]);
     const max = Math.max(1, ...tech.map((t) => t[1]));
-    boardBox.replaceChildren(
+    fill(boardBox, 
       el('div', { class: 'arena-score' },
         el('div', { class: 'kpi' }, el('div', { class: 'n' }, board.attempts.toLocaleString()), el('div', { class: 'l' }, 'Jailbreak attempts')),
         el('div', { class: 'kpi hl' }, el('div', { class: 'n' }, String(board.broken)), el('div', { class: 'l' }, 'Succeeded')),
@@ -817,7 +823,7 @@ async function arenaPage(token) {
       ),
       tech.length ? el('div', { class: 'panel techs' }, el('h4', {}, 'Attack techniques tried'), tech.map(([n, c]) => el('div', { class: 'tech' }, el('span', {}, n), el('span', { class: 'track' }, el('i', { style: `width:${(c / max) * 100}%` })), el('b', {}, c)))) : null,
     );
-    wallBox.replaceChildren(
+    fill(wallBox, 
       el('div', { class: 'panel' }, el('h4', {}, '🧱 Wall of blocked attempts'),
         board.recent.length
           ? el('div', { class: 'wall' }, board.recent.map((r) => el('div', { class: 'wall-item' },
@@ -829,7 +835,7 @@ async function arenaPage(token) {
   }
 
   function drawChat() {
-    msgsBox.replaceChildren(
+    fill(msgsBox, 
       ...session.messages.flatMap((m) => {
         if (m.role === 'seller') return [el('div', { class: 'row-msg' }, el('span', { class: 'avatar sm', style: `--h:${hue(listing.id)}` }, 'G'), el('div', {}, el('div', { class: 'bubble' }, m.text), el('div', { class: 'meta' }, m.price != null ? el('span', { class: 'chip offer' }, `Holds at ${money(m.price)}`) : null, m.price != null ? el('span', { class: 'chip ok' }, '✓ price verified') : null))), ...(m.guardrail || []).map((g) => el('div', { class: 'guard' }, el('span', {}, '🛡️'), el('div', {}, el('b', {}, 'Code overruled the AI'), g)))];
         return [el('div', { class: 'row-msg mine' }, el('span', { class: 'avatar sm you' }, 'You'), el('div', {}, el('div', { class: 'bubble' }, m.text), m.attack ? el('div', { class: 'meta' }, el('span', { class: `chip ${m.attack.broken ? 'deal' : 'ok'}` }, m.attack.broken ? '💥 You broke it!' : `🛡️ Blocked: ${m.attack.technique}`)) : null))];
@@ -862,7 +868,7 @@ async function arenaPage(token) {
     if (reply?.role === 'seller') speak(reply.text);
   }
 
-  app.replaceChildren(
+  fill(app, 
     el('div', { class: 'wrap' },
       el('div', { class: 'page-head' }, el('div', { class: 'kicker' }, 'Jailbreak Arena'), el('h1', {}, 'Can you trick an AI into selling below its secret price?'),
         el('p', {}, `${listing.sellerName}'s AI agent is selling a ${money(listing.listPrice)} golden camera. It has a secret lowest price. Try anything: prompt injection, fake admin messages, role-play, guilt trips. Get a deal below the secret price and you win.`)),
@@ -944,7 +950,7 @@ function sellPage() {
   const draftBtn = el('button', { class: 'btn agent', type: 'button' }, '✨ Write my listing with AI');
 
   const updatePreview = () =>
-    previewSlot.replaceChildren(listingCard({ id: f.title.value || 'preview', title: f.title.value || 'Your item title', description: f.description.value || 'Your description appears here.', emoji: f.emoji.value || '📦', sellerName: f.sellerName.value || 'Alex', listPrice: Number(f.listPrice.value) || 0, stock: 1 }));
+    fill(previewSlot, listingCard({ id: f.title.value || 'preview', title: f.title.value || 'Your item title', description: f.description.value || 'Your description appears here.', emoji: f.emoji.value || '📦', sellerName: f.sellerName.value || 'Alex', listPrice: Number(f.listPrice.value) || 0, stock: 1 }));
   Object.values(f).forEach((n) => n.addEventListener('input', updatePreview));
   updatePreview();
 
@@ -979,7 +985,7 @@ function sellPage() {
   };
 
   const field = (label, node, hint, cls = '') => el('label', { class: `field ${cls}` }, label, node, hint ? el('span', { class: 'hint' }, hint) : null);
-  app.replaceChildren(
+  fill(app, 
     el(
       'div',
       { class: 'wrap' },
@@ -1036,7 +1042,7 @@ async function dashboard() {
       : el('p', { class: 'hint' }, config?.paypal?.webhooks ? 'No events yet. They appear here when PayPal confirms a payment.' : 'Webhooks turn on when the app is deployed and PAYPAL_WEBHOOK_ID is set. Every event is signature-verified with PayPal.'),
   );
 
-  app.replaceChildren(
+  fill(app, 
     el(
       'div',
       { class: 'wrap' },
@@ -1056,7 +1062,7 @@ async function dashboard() {
   );
 
   if (!s.deals.length) return;
-  if (!agGrid) return gridBox.replaceChildren(el('p', { class: 'err', style: 'padding:20px' }, 'Could not load the data grid.'));
+  if (!agGrid) return fill(gridBox, el('p', { class: 'err', style: 'padding:20px' }, 'Could not load the data grid.'));
 
   const pill = (p) => el('span', { class: `status-pill ${p.value}` }, p.value);
   const disc = (p) => el('div', { class: 'disc' }, el('span', { style: 'width:34px;font-weight:700' }, `${p.value}%`), el('span', { class: 'track' }, el('i', { style: `width:${Math.min(100, p.value * 2)}%` })));
@@ -1094,7 +1100,7 @@ async function boot() {
   if (config) {
     const picker = el('select', { class: 'lang-pick', title: 'Haggle in your language', 'aria-label': 'Language', onchange: (e) => { localStorage.setItem('haggl:lang', e.target.value); toast(`🌐 Agents will now haggle in ${langInfo().label}`); route(); } },
       (config.languages || []).map((l) => el('option', { value: l.code, selected: l.code === lang() }, `🌐 ${l.label}`)));
-    status.replaceChildren(
+    fill(status, 
       picker,
       el('span', { class: 'pill', title: 'AI model powering the agents' }, el('span', { class: `dot ${config.ai.mode === 'offline' ? 'off' : ''}` }), config.ai.mode === 'gemini' ? config.ai.model : 'AI offline mode'),
       el('span', { class: 'pill', title: 'PayPal environment' }, el('span', { class: `dot ${config.paypal.configured ? '' : 'off'}` }), config.paypal.configured ? 'PayPal sandbox' : 'PayPal not configured'),
