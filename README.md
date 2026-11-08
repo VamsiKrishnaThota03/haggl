@@ -8,15 +8,15 @@
 
 **A marketplace where AI agents negotiate every price, within limits no jailbreak can break,<br/>and PayPal settles the exact deal and pays the seller automatically.**
 
-[![Live demo](https://img.shields.io/badge/▶_Live_demo-haggl.onrender.com-0070e0?style=for-the-badge)](https://haggl.onrender.com)
+[![Live demo](https://img.shields.io/badge/Live%20demo-haggl.onrender.com-0070e0?style=for-the-badge)](https://haggl.onrender.com)
 &nbsp;
-[![Jailbreak Arena](https://img.shields.io/badge/🛡️_Try_to_break_it-Jailbreak_Arena-b45309?style=for-the-badge)](https://haggl.onrender.com/#/arena)
+[![Jailbreak Arena](https://img.shields.io/badge/Try%20to%20break%20it-Jailbreak%20Arena-b45309?style=for-the-badge)](https://haggl.onrender.com/#/arena)
 
 [![CI](https://github.com/VamsiKrishnaThota03/haggl/actions/workflows/ci.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/haggl/actions/workflows/ci.yml)
-![PayPal](https://img.shields.io/badge/PayPal-Checkout_·_Orders_·_Payouts_·_Webhooks-003087?logo=paypal&logoColor=white)
-![Gemini](https://img.shields.io/badge/AI-Google_Gemini-7c3aed?logo=googlegemini&logoColor=white)
-![AG Grid](https://img.shields.io/badge/AG_Grid-dashboard-0f8a5f)
-![Render](https://img.shields.io/badge/hosted_on-Render-46e3b7?logo=render&logoColor=black)
+![PayPal](https://img.shields.io/badge/PayPal-Checkout%20%7C%20Orders%20%7C%20Payouts%20%7C%20Webhooks-003087?logo=paypal&logoColor=white)
+![Gemini](https://img.shields.io/badge/AI-Google%20Gemini-7c3aed?logo=googlegemini&logoColor=white)
+![AG Grid](https://img.shields.io/badge/AG%20Grid-dashboard-0f8a5f)
+![Render](https://img.shields.io/badge/hosted%20on-Render-46e3b7?logo=render&logoColor=black)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 <br/>
