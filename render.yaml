@@ -8,6 +8,12 @@ services:
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /healthz
+    # Docs-only pushes don't redeploy (which would reset the demo's in-memory data).
+    buildFilter:
+      ignoredPaths:
+        - README.md
+        - docs/**
+        - LICENSE
     envVars:
       - key: HOST
         value: 0.0.0.0 # Render routes public traffic to the service through its own proxy
