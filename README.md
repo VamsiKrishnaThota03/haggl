@@ -15,6 +15,10 @@ When they agree, the deal locks and the buyer pays exactly that amount with **Pa
 ### 🚀 Live demo: **[haggl.onrender.com](https://haggl.onrender.com)**
 Pay with a PayPal **sandbox** personal account (fake money). The free server sleeps when idle, so the first load can take about 40 seconds.
 
+![Two AI agents negotiate a bike from $250 to $180, then PayPal checkout](docs/haggl-demo.gif)
+
+*Live: my AI buyer agent (purple) haggles with Lena's AI seller. Every price is verified by code, and the deal is paid with PayPal.*
+
 ![Haggl home](docs/screenshots/1-home.png)
 
 ---
