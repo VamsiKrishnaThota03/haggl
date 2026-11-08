@@ -170,7 +170,8 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
 .chat-head .sub { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .chat-head .actions { margin-left: auto; display: flex; gap: 8px; }
 .msgs { flex: 1; overflow-y: auto; padding: 22px 18px; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(var(--surface-2), var(--surface)); scroll-behavior: smooth; }
-.row-msg { display: flex; gap: 10px; align-items: flex-end; animation: rise 0.3s; max-width: 86%; }
+.row-msg { display: flex; gap: 10px; align-items: flex-end; max-width: 86%; }
+.row-msg.anim, .guard.anim { animation: rise 0.3s; }
 .row-msg.mine { align-self: flex-end; flex-direction: row-reverse; }
 .bubble { padding: 11px 14px; border-radius: 18px; line-height: 1.5; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
 .row-msg:not(.mine) .bubble { border-bottom-left-radius: 6px; }
@@ -187,7 +188,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
 .chip.deal { background: var(--good); color: #fff; }
 .thought { margin-top: 6px; font-size: 12.5px; color: #5b21b6; background: var(--agent-soft); border: 1px dashed #c9b6fb; border-radius: 12px; padding: 7px 10px; }
 .thought::before { content: '💭 Agent reasoning · '; font-weight: 700; }
-.guard { align-self: center; display: flex; gap: 10px; align-items: flex-start; max-width: 90%; font-size: 13px; color: #7c3a03; background: var(--warn-soft); border: 1px solid #fcd9a3; border-radius: 14px; padding: 10px 14px; animation: rise 0.3s; }
+.guard { align-self: center; display: flex; gap: 10px; align-items: flex-start; max-width: 90%; font-size: 13px; color: #7c3a03; background: var(--warn-soft); border: 1px solid #fcd9a3; border-radius: 14px; padding: 10px 14px; }
 .guard b { display: block; color: var(--warn); }
 .system-note { align-self: center; font-size: 12px; color: var(--muted); background: #eef1f8; padding: 4px 12px; border-radius: 999px; }
 .typing { display: inline-flex; gap: 4px; padding: 14px 16px; }

@@ -275,6 +275,7 @@ async function dealRoom(listingId, query, token) {
   let renderedStatus = null;
   const alive = () => token === pageToken;
   let spoken = session.messages.length; // only speak messages that arrive from now on
+  let shown = 0; // messages already on screen: only newer ones get the entrance animation
   async function speakNew() {
     const msgs = state.session.messages;
     const from = spoken;
@@ -336,6 +337,7 @@ async function dealRoom(listingId, query, token) {
 
   function messageNodes() {
     const s = state.session;
+    const isNew = (i) => (i >= shown ? ' anim' : '');
     const lastCounter = s.messages.map((m) => m.role === 'seller' && m.action === 'counter').lastIndexOf(true);
     const nodes = [el('div', { class: 'system-note' }, `🔒 Negotiation started · prices verified by Haggl guardrails`)];
     s.messages.forEach((m, i) => {
@@ -347,15 +349,15 @@ async function dealRoom(listingId, query, token) {
         chips.push(el('span', { class: 'chip ai' }, m.source === 'offline' ? 'offline agent' : 'Gemini'));
         const body = el('div', {}, el('div', { class: 'bubble' }, m.text), m.textEn && m.textEn !== m.text ? el('div', { class: 'translation' }, `🌐 ${listing.sellerName} sees (English): ${m.textEn}`) : null, el('div', { class: 'meta' }, chips, el('span', {}, time(m.at))));
         if (i === lastCounter && s.status === 'open' && !state.agentRunning && !state.thinking) body.append(el('button', { class: 'btn sm accept-btn', onclick: () => send(`Deal! I'll take it at ${money(m.price)}.`) }, `Accept ${money(m.price)}`));
-        nodes.push(el('div', { class: 'row-msg' }, el('span', { class: 'avatar sm', style: `--h:${sellerHue}` }, listing.sellerName[0]), body));
-        (m.guardrail || []).forEach((g) => nodes.push(el('div', { class: 'guard' }, el('span', {}, '🛡️'), el('div', {}, el('b', {}, 'Guardrail intervened'), g))));
+        nodes.push(el('div', { class: `row-msg${isNew(i)}` }, el('span', { class: 'avatar sm', style: `--h:${sellerHue}` }, listing.sellerName[0]), body));
+        (m.guardrail || []).forEach((g) => nodes.push(el('div', { class: `guard${isNew(i)}` }, el('span', {}, '🛡️'), el('div', {}, el('b', {}, 'Guardrail intervened'), g))));
       } else {
         const agent = m.actor === 'agent';
         const chips = [];
         if (m.offer != null) chips.push(el('span', { class: 'chip offer' }, `Offer ${money(m.offer)}`));
         chips.push(el('span', {}, `${agent ? 'Your AI agent' : 'You'} · ${time(m.at)}`));
         const body = el('div', {}, el('div', { class: 'bubble' }, m.text), m.thought ? el('div', { class: 'thought' }, m.thought) : null, el('div', { class: 'meta' }, chips));
-        nodes.push(el('div', { class: `row-msg mine ${agent ? 'agent' : ''}` }, el('span', { class: `avatar sm ${agent ? 'bot' : 'you'}` }, agent ? '🤖' : 'You'), body));
+        nodes.push(el('div', { class: `row-msg mine ${agent ? 'agent' : ''}${isNew(i)}` }, el('span', { class: `avatar sm ${agent ? 'bot' : 'you'}` }, agent ? '🤖' : 'You'), body));
       }
     });
     if (s.status === 'walked') nodes.push(el('div', { class: 'system-note' }, '🚶 Your agent walked away. No deal within budget.'));
@@ -517,6 +519,7 @@ async function dealRoom(listingId, query, token) {
         )
       : null;
     const msgs = el('div', { class: 'msgs', 'aria-live': 'polite' }, messageNodes());
+    shown = s.messages.length;
 
     app.replaceChildren(
       el(
