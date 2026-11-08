@@ -100,7 +100,7 @@ function seedListings() {
       urgency: 0.45,
     },
   ]
-    .map((l, i) => ({ ...l, id: `seed-${i + 1}`, stock: 3, createdAt: now, sellerPaypalEmail: sandboxSellerEmail(l.sellerName) }))
+    .map((l, i) => ({ ...l, id: `seed-${i + 1}`, stock: 50, createdAt: now, sellerPaypalEmail: sandboxSellerEmail(l.sellerName) }))
     .concat({
       id: 'arena',
       arena: true, // the Jailbreak Arena's target: hidden from the market and the shopping agent
