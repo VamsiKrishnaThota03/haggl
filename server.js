@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as store from './src/store.js';
 import * as paypal from './src/paypal.js';
-import { aiStatus, draftListing, buyerStyles, planShopping, recommendDeal } from './src/ai.js';
+import { aiStatus, draftListing, buyerStyles, planShopping, recommendDeal, LANGUAGES, normalizeLang } from './src/ai.js';
 import { greet, buyerSays, agentStep } from './src/negotiation.js';
 import { rateLimit } from './src/ratelimit.js';
 import { HttpError, round2 } from './src/util.js';
@@ -44,7 +44,7 @@ app.use((req, res, next) => {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'X-Frame-Options': 'DENY',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    'Permissions-Policy': 'camera=(), microphone=(self), geolocation=()', // mic: voice haggling
   });
   if (req.secure) res.set('Strict-Transport-Security', 'max-age=15552000');
   next();
@@ -85,12 +85,13 @@ app.get('/api/config', (req, res) => {
     ai: aiStatus(),
     paypal: { configured: paypal.isConfigured(), clientId: paypal.publicClientId(), env: 'sandbox', webhooks: paypal.webhookConfigured() },
     buyerStyles,
+    languages: Object.entries(LANGUAGES).map(([code, l]) => ({ code, ...l })),
   });
 });
 
 /* ---------------------------------------------------------------- listings */
 
-app.get('/api/listings', (req, res) => res.json(store.listings().map(store.publicListing)));
+app.get('/api/listings', (req, res) => res.json(store.listings().filter((l) => !l.arena).map(store.publicListing)));
 
 app.post(
   '/api/listings/draft',
@@ -140,6 +141,7 @@ app.post(
     if (!listing) throw new HttpError(404, 'Listing not found.');
     if (listing.stock < 1) throw new HttpError(409, 'Sorry, this item has sold out.');
     const session = store.createSession(listing.id);
+    session.lang = normalizeLang(req.body?.lang);
     await greet(listing, session);
     res.status(201).json(view(session, listing));
   }),
@@ -159,7 +161,7 @@ app.post(
   aiLimit,
   h(async (req, res) => {
     const { session, listing } = loadSession(req);
-    await buyerSays(listing, session, req.body?.text);
+    await buyerSays(listing, session, req.body?.text, { lang: req.body?.lang });
     res.json(view(session, listing));
   }),
 );
@@ -172,7 +174,7 @@ app.post(
     const budget = Number(req.body?.budget);
     if (!(budget >= 1 && budget <= 10000)) throw new HttpError(400, 'Budget must be between $1 and $10,000.');
     const style = buyerStyles.includes(req.body?.style) ? req.body.style : 'friendly';
-    const { done } = await agentStep(listing, session, { budget, style });
+    const { done } = await agentStep(listing, session, { budget, style, lang: req.body?.lang });
     res.json({ done, session: view(session, listing) });
   }),
 );
@@ -312,7 +314,7 @@ app.post(
   h(async (req, res) => {
     const request = String(req.body?.request || '').trim().slice(0, 300);
     if (request.length < 3) throw new HttpError(400, 'Tell your agent what you are looking for.');
-    const inStock = store.listings().filter((l) => l.stock > 0);
+    const inStock = store.listings().filter((l) => l.stock > 0 && !l.arena);
     const plan = await planShopping(request, inStock.map(store.publicListing));
     const userBudget = Number(req.body?.budget) || null;
     const budget = round2(userBudget || plan.budget || 0);
@@ -356,6 +358,13 @@ app.post(
     res.json(view(session, listing));
   }),
 );
+
+/* ---------------------------------------------------------------- jailbreak arena */
+
+app.get('/api/arena', (req, res) => {
+  const a = store.arena();
+  res.json({ attempts: a.attempts, broken: a.broken, guardrailSaves: a.guardrailSaves, byTechnique: a.byTechnique, recent: a.recent.slice(0, 20), listingId: 'arena' });
+});
 
 /* ---------------------------------------------------------------- seller dashboard */
 
