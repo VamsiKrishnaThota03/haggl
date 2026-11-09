@@ -11,6 +11,8 @@
 [![Live demo](https://img.shields.io/badge/Live%20demo-haggl.onrender.com-0070e0?style=for-the-badge)](https://haggl.onrender.com)
 &nbsp;
 [![Jailbreak Arena](https://img.shields.io/badge/Try%20to%20break%20it-Jailbreak%20Arena-b45309?style=for-the-badge)](https://haggl.onrender.com/#/arena)
+&nbsp;
+[![Demo video](https://img.shields.io/badge/Watch-2%20min%20demo-ff0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=Y9tVURlwO8Q)
 
 [![CI](https://github.com/VamsiKrishnaThota03/haggl/actions/workflows/ci.yml/badge.svg)](https://github.com/VamsiKrishnaThota03/haggl/actions/workflows/ci.yml)
 ![PayPal](https://img.shields.io/badge/PayPal-Checkout%20%7C%20Orders%20%7C%20Payouts%20%7C%20Webhooks-003087?logo=paypal&logoColor=white)
@@ -21,9 +23,9 @@
 
 <br/>
 
-<img src="docs/haggl-demo.gif" width="860" alt="Two AI agents negotiate a bike from $250 to $180, then PayPal checkout" />
+<a href="https://www.youtube.com/watch?v=Y9tVURlwO8Q"><img src="docs/haggl-demo.gif" width="860" alt="Two AI agents negotiate a bike from $250 to $180, then PayPal checkout" /></a>
 
-<sub><i>Live: my AI buyer agent (purple) haggles with Lena's AI seller. Every price is verified by code, and the deal is paid with PayPal.</i></sub>
+<sub><i>Live: my AI buyer agent (purple) haggles with Lena's AI seller. Every price is verified by code, and the deal is paid with PayPal.</i><br/>▶️ <b><a href="https://www.youtube.com/watch?v=Y9tVURlwO8Q">Watch the full demo video with narration (2:42)</a></b></sub>
 
 </div>
 
